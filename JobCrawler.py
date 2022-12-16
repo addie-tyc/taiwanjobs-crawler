@@ -43,6 +43,12 @@ class JobCrawler():
     #     await page.goto(url)
     #     return page
     
+    def sink_path(self, dist, prefix='data'):
+        return f'{prefix}/{dist["city_name"]}/{dist["name"]}.json'
+
+    def log(self, dist, message):
+        print(f'{dist["city_name"]}{dist["name"]} - {message}')
+
     def get_random_user_agent(self):
         return self.user_agent_rotator.get_random_user_agent()
 
@@ -57,13 +63,16 @@ class JobCrawler():
             for dist in dists:
                 yield {'city_name': city['title'], 'name': dist['title'], 'id': dist['id'], 'value': dist['value']}
 
-    async def get_cookies(self, page, dist):
-        print(f'{dist["city_name"]}{dist["name"]} - crawling')
+    async def search(self, page, dist):
+        self.log(dist, 'crawling')
         await page.waitForSelector('#CPH1_btnSearch')
         dist_btn = await page.querySelector(f'#{dist["id"]}')
         if dist_btn: await page.evaluate(f'document.querySelector("#{dist["id"]}").click();')
         await page.click('#CPH1_btnSearch')
         await page.waitForNavigation({'waitUntil': 'networkidle2'})
+        return page
+
+    async def get_cookies(self, page):
         cookies = await page.cookies()
         cookies = {d['name']: d['value'] for d in cookies if d['name'] in self.ckeys}
         return cookies
@@ -76,13 +85,13 @@ class JobCrawler():
     #             raise e
     #         print(f'retry for {asyncfn.__name__}, {retries} times left.')
     #         return await self.retry(asyncfn, retries - 1)
-
-    def save_jobs(self, data, dist):
-        filename = f"data/{dist['city_name']}/{dist['name']}.json"
+    
+    def save_jobs(self, data, dist, prefix='data'):
+        filename = self.sink_path(dist)
         os.makedirs(os.path.dirname(filename), exist_ok=True)
         with open(filename, 'w+') as file:
             file.write(json.dumps(data, indent=4, ensure_ascii=False))
-        print(f'{dist["city_name"]}{dist["name"]} - saved')
+        self.log(dist, 'saved')
 
     async def get_jobs(self, cookies, dist):
         list_url = 'https://job.taiwanjobs.gov.tw/Internet/Index/ajax/job_search_listPage.ashx'
@@ -109,11 +118,11 @@ class JobCrawler():
             data = json.loads(res.text)
             await self.loop.run_in_executor(None, self.save_jobs, data, dist)
         else:
-            print(f'{dist["city_name"]}{dist["name"]} - no job, skipping')
+            self.log(dist, 'no job, skipping')
 
     def is_cache_fresh(self, dist, cache_expiry_seconds=12 * HOUR):
         threshold = time.time() - cache_expiry_seconds
-        path = f'data/{dist["city_name"]}/{dist["name"]}.json'
+        path = self.sink_path(dist)
         try:
             mtime = os.path.getmtime(path)
             return mtime > threshold
@@ -125,15 +134,16 @@ class JobCrawler():
             browser = await launch()
             page = await browser.newPage()
             await page.goto(self.url)
-            cookies = await self.get_cookies(page, dist)
-            await self.get_jobs(cookies, dist)
+            page = await self.search(page, dist)
+            cookies = await self.get_cookies(page)
             await browser.close()
+            await self.get_jobs(cookies, dist)
 
     def main(self):
         tasks = []
         for dist in self.get_districts():
             if self.is_cache_fresh(dist):
-                print(f'{dist["city_name"]}{dist["name"]} - cache hit, skipping')
+                self.log(dist, 'cache hit, skipping')
                 continue
             tasks.append(self.loop.create_task(self.run(dist)))
         self.loop.run_until_complete(asyncio.wait(tasks))
