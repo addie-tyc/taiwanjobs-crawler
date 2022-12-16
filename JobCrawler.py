@@ -5,13 +5,13 @@ import requests
 
 import asyncio
 from bs4 import BeautifulSoup as bs
-from pyppeteer import launch
+from pyppeteer import launch, errors
 from random_user_agent.user_agent import UserAgent
 from random_user_agent.params import SoftwareName, OperatingSystem
 
 class JobCrawler():
-    def __init__(self, city_num, url='https://job.taiwanjobs.gov.tw/Internet/Index/job_search_list.aspx', START=0, BATCH_SIZE=1000) -> None:
-        self.city_num = city_num
+    def __init__(self, num_sema=10, url='https://job.taiwanjobs.gov.tw/Internet/Index/job_search_list.aspx', START=0, BATCH_SIZE=1000) -> None:
+        self.sema = asyncio.Semaphore(value=num_sema)
         self.url = url
         self.start = START
         self.batch_size = BATCH_SIZE
@@ -47,12 +47,13 @@ class JobCrawler():
     def get_districts(self):
         res = requests.get(self.url)
         html = bs(res.text, 'html.parser')
-        city_key = fr'UC_Modal-item_{self.city_num}'
-        city = html.find('input', {'id': re.compile(city_key)})
-        dists_key = fr'{city_key}_\d+'
-        dists = html.findAll('input', {'id': re.compile(dists_key)})
-        for dist in dists:
-            yield {'city_name': city['title'], 'name': dist['title'], 'id': dist['id'], 'value': dist['value']}
+        for city_num in range(22):
+            city_key = fr'UC_Modal-item_{city_num}'
+            city = html.find('input', {'id': re.compile(city_key)})
+            dists_key = fr'{city_key}_\d+'
+            dists = html.findAll('input', {'id': re.compile(dists_key)})
+            for dist in dists:
+                yield {'city_name': city['title'], 'name': dist['title'], 'id': dist['id'], 'value': dist['value']}
 
     async def get_cookies(self, page, dist):
         print(f'{dist["city_name"]}{dist["name"]} - crawling')
@@ -60,12 +61,28 @@ class JobCrawler():
         dist_btn = await page.querySelector(f'#{dist["id"]}')
         if dist_btn: await page.evaluate(f'document.querySelector("#{dist["id"]}").click();')
         await page.click('#CPH1_btnSearch')
-        await page.waitForNavigation()
+        await page.waitForNavigation({'waitUntil': 'networkidle2'})
         cookies = await page.cookies()
         cookies = {d['name']: d['value'] for d in cookies if d['name'] in self.ckeys}
         return cookies
 
-    def get_jobs(self, cookies, dist):
+    # async def retry(self, asyncfn, retries=3):
+    #     try:
+    #         return await asyncfn
+    #     except errors.TimeoutError as e:
+    #         if retries <= 0:
+    #             raise e
+    #         print(f'retry for {asyncfn.__name__}, {retries} times left.')
+    #         return await self.retry(asyncfn, retries - 1)
+
+    def save_jobs(self, data, dist):
+        filename = f"data/{dist['city_name']}/{dist['name']}.json"
+        os.makedirs(os.path.dirname(filename), exist_ok=True)
+        with open(filename, 'w+') as file:
+            file.write(json.dumps(data, indent=4, ensure_ascii=False))
+        print(f'{dist["city_name"]}{dist["name"]} - saved')
+
+    async def get_jobs(self, cookies, dist):
         list_url = 'https://job.taiwanjobs.gov.tw/Internet/Index/ajax/job_search_listPage.ashx'
         headers = {
             'Host': 'job.taiwanjobs.gov.tw',
@@ -87,19 +104,16 @@ class JobCrawler():
         res = requests.post(list_url, headers=headers, cookies=cookies, data=raw_payload)
         res.raise_for_status()
         data = json.loads(res.text)
-        filename = f"data/{dist['city_name']}/{dist['name']}.json"
-        os.makedirs(os.path.dirname(filename), exist_ok=True)
-        with open(filename, 'w+') as file:
-            file.write(json.dumps(data, indent=4, ensure_ascii=False))
-        print(f'{dist["city_name"]}{dist["name"]} - saved')
+        await self.loop.run_in_executor(None, self.save_jobs, data, dist)
 
     async def run(self, dist):
-        browser = await launch()
-        page = await browser.newPage()
-        await page.goto(self.url)
-        cookies = await self.get_cookies(page, dist)
-        self.get_jobs(cookies, dist)
-        await browser.close()
+        async with self.sema:
+            browser = await launch()
+            page = await browser.newPage()
+            await page.goto(self.url)
+            cookies = await self.get_cookies(page, dist)
+            await self.get_jobs(cookies, dist)
+            await browser.close()
 
     def main(self):
         tasks = [self.loop.create_task(self.run(dist)) for dist in self.get_districts()]
