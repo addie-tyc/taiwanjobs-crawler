@@ -3,7 +3,9 @@ import os
 import re
 import requests
 
+import asyncio
 from bs4 import BeautifulSoup as bs
+from pyppeteer import launch
 from random_user_agent.user_agent import UserAgent
 from random_user_agent.params import SoftwareName, OperatingSystem
 
@@ -66,3 +68,16 @@ async def get_jobs(cookies, dist):
         file.write(json.dumps(data, indent=4, ensure_ascii=False))
     print(f'{dist["city_name"]}{dist["name"]} - saved')
 
+async def run(dist):
+    browser = await launch(
+        # headless=False
+        )
+    page = await browser.newPage()
+    cookies = await get_cookies(page, dist)
+    print(f'{dist["city_name"]}{dist["name"]} - crawling')
+    await get_jobs(cookies, dist)
+    await browser.close()
+
+loop = asyncio.get_event_loop()
+tasks = [loop.create_task(run(dist)) for dist in get_districts()]
+loop.run_until_complete(asyncio.wait(tasks))
