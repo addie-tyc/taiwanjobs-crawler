@@ -105,8 +105,11 @@ class JobCrawler():
         raw_payload = f'startAt={self.start}&pageSize={self.batch_size}&sortField=TRANDATE+desc'
         res = requests.post(list_url, headers=headers, cookies=cookies, data=raw_payload)
         res.raise_for_status()
-        data = json.loads(res.text)
-        await self.loop.run_in_executor(None, self.save_jobs, data, dist)
+        if res.text:
+            data = json.loads(res.text)
+            await self.loop.run_in_executor(None, self.save_jobs, data, dist)
+        else:
+            print(f'{dist["city_name"]}{dist["name"]} - no job, skipping')
 
     def is_cache_fresh(self, dist, cache_expiry_seconds=12 * HOUR):
         threshold = time.time() - cache_expiry_seconds
