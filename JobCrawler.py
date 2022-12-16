@@ -1,3 +1,4 @@
+import time
 import json
 import os
 import re
@@ -9,6 +10,7 @@ from pyppeteer import launch, errors
 from random_user_agent.user_agent import UserAgent
 from random_user_agent.params import SoftwareName, OperatingSystem
 
+HOUR = 3600
 class JobCrawler():
     def __init__(self, num_sema=10, url='https://job.taiwanjobs.gov.tw/Internet/Index/job_search_list.aspx', START=0, BATCH_SIZE=1000) -> None:
         self.sema = asyncio.Semaphore(value=num_sema)
@@ -106,6 +108,15 @@ class JobCrawler():
         data = json.loads(res.text)
         await self.loop.run_in_executor(None, self.save_jobs, data, dist)
 
+    def is_cache_fresh(self, dist, cache_expiry_seconds=12 * HOUR):
+        threshold = time.time() - cache_expiry_seconds
+        path = f'data/{dist["city_name"]}/{dist["name"]}.json'
+        try:
+            mtime = os.path.getmtime(path)
+            return mtime > threshold
+        except OSError:
+            return False
+
     async def run(self, dist):
         async with self.sema:
             browser = await launch()
@@ -116,5 +127,10 @@ class JobCrawler():
             await browser.close()
 
     def main(self):
-        tasks = [self.loop.create_task(self.run(dist)) for dist in self.get_districts()]
+        tasks = []
+        for dist in self.get_districts():
+            if self.is_cache_fresh(dist):
+                print(f'{dist["city_name"]}{dist["name"]} - cache hit, skipping')
+                continue
+            tasks.append(self.loop.create_task(self.run(dist)))
         self.loop.run_until_complete(asyncio.wait(tasks))
