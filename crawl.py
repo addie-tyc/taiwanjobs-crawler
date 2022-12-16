@@ -1,7 +1,16 @@
+import json
+import os
 import re
 import requests
 
 from bs4 import BeautifulSoup as bs
+from random_user_agent.user_agent import UserAgent
+from random_user_agent.params import SoftwareName, OperatingSystem
+
+# generate random user-agent
+software_names = [SoftwareName.CHROME.value]
+operating_systems = [OperatingSystem.WINDOWS.value, OperatingSystem.LINUX.value]   
+user_agent_rotator = UserAgent(software_names=software_names, operating_systems=operating_systems, limit=100)
 
 START, BATCH_SIZE = 0, 1000
 url = 'https://job.taiwanjobs.gov.tw/Internet/Index/job_search_list.aspx'
@@ -28,4 +37,32 @@ def get_districts():
         dists = html.findAll('input', {'id': re.compile(dists_key)})
         for dist in dists:
             yield {'city_name': city['title'], 'name': dist['title'], 'id': dist['id'], 'value': dist['value']}
+
+async def get_jobs(cookies, dist):
+    list_url = 'https://job.taiwanjobs.gov.tw/Internet/Index/ajax/job_search_listPage.ashx'
+    headers = {
+        'Host': 'job.taiwanjobs.gov.tw',
+        'User-Agent': user_agent_rotator.get_random_user_agent(),
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Content-Length': '2338',
+        'Origin': 'https://job.taiwanjobs.gov.tw',
+        'Connection': 'keep-alive',
+        'Referer': 'https://job.taiwanjobs.gov.tw/Internet/Index/job_search_list.aspx',
+        'Upgrade-Insecure-Requests': '1',
+        'Sec-Fetch-Dest': 'document',
+        'Sec-Fetch-Mode': 'navigate',
+        'Sec-Fetch-Site': 'same-origin',
+        'Sec-Fetch-User': '?1'
+    }
+    raw_payload = f'startAt={START}&pageSize={BATCH_SIZE}&sortField=TRANDATE+desc'
+    res = requests.post(list_url, headers=headers, cookies=cookies, data=raw_payload)
+    res.raise_for_status()
+    data = json.loads(res.text)
+    filename = f"data/{dist['city_name']}/{dist['name']}.json"
+    os.makedirs(os.path.dirname(filename), exist_ok=True)
+    with open(filename, 'w+') as file:
+        file.write(json.dumps(data, indent=4, ensure_ascii=False))
+    print(f'{dist["city_name"]}{dist["name"]} - saved')
 
