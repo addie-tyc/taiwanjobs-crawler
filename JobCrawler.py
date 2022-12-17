@@ -19,30 +19,13 @@ class JobCrawler():
         self.batch_size = BATCH_SIZE
         self.ckeys = {'ccga', 'ccgas', '__RequestVerificationToken', 'ASP.NET_SessionId'}
         self.loop = asyncio.get_event_loop()
-        self.__browser = None
         self.hr_bank = '' # overwrite in each hr_bank crawler
+
         
         # generate random user-agent
         software_names = [SoftwareName.CHROME.value]
         operating_systems = [OperatingSystem.WINDOWS.value, OperatingSystem.LINUX.value]   
         self.user_agent_rotator = UserAgent(software_names=software_names, operating_systems=operating_systems, limit=100)
-    
-    # async def get_browser(self):
-    #     if not self.__browser:
-    #         self.__browser = await launch()
-    #     return self.__browser
-
-    # async def close_browser(self):
-    #     if self.__browser:
-    #         await self.__browser.close()
-    #         self.__browser = None
-    
-    # async def new_page(self, url=None):
-    #     browser = self.get_browser()
-    #     page = await browser.newPage()
-    #     url = url if url else self.url
-    #     await page.goto(url)
-    #     return page
     
     def sink_path(self, dist, extra_prefix):
         prefix = f'data/{extra_prefix}' if extra_prefix else 'data'
@@ -78,15 +61,6 @@ class JobCrawler():
         cookies = await page.cookies()
         cookies = {d['name']: d['value'] for d in cookies if d['name'] in self.ckeys}
         return cookies
-
-    # async def retry(self, asyncfn, retries=3):
-    #     try:
-    #         return await asyncfn
-    #     except errors.TimeoutError as e:
-    #         if retries <= 0:
-    #             raise e
-    #         print(f'retry for {asyncfn.__name__}, {retries} times left.')
-    #         return await self.retry(asyncfn, retries - 1)
     
     def save_jobs(self, data, dist, extra_prefix):
         filename = self.sink_path(dist, extra_prefix)
