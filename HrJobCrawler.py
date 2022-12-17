@@ -6,8 +6,7 @@ class HrJobCrawler(JobCrawler):
 
     def __init__(self, hr_bank, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        if hr_bank not in hr_banks:
-            assert(f'`hr_bank` must be one of the following: {hr_banks}.')
+        assert hr_bank in hr_banks, f'`hr_bank` must be one of the following: {hr_banks}.'
         self.hr_bank = hr_bank
     
     def get_headers(self):
