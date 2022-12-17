@@ -29,6 +29,7 @@ class JobCrawler():
     
     def sink_path(self, dist, extra_prefix):
         prefix = f'data/{extra_prefix}' if extra_prefix else 'data/main'
+        if not dist['name']: dist['name'] = '不分區'
         return f'{prefix}/{dist["city_name"]}/{dist["name"]}.json'
 
     def get_headers(self):
