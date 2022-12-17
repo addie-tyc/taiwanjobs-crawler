@@ -20,6 +20,7 @@ class JobCrawler():
         self.ckeys = {'ccga', 'ccgas', '__RequestVerificationToken', 'ASP.NET_SessionId'}
         self.loop = asyncio.get_event_loop()
         self.__browser = None
+        self.hr_bank = '' # overwrite in each hr_bank crawler
         
         # generate random user-agent
         software_names = [SoftwareName.CHROME.value]
@@ -43,7 +44,8 @@ class JobCrawler():
     #     await page.goto(url)
     #     return page
     
-    def sink_path(self, dist, prefix='data'):
+    def sink_path(self, dist, extra_prefix):
+        prefix = f'data/{extra_prefix}' if extra_prefix else 'data'
         return f'{prefix}/{dist["city_name"]}/{dist["name"]}.json'
 
     def log(self, dist, message):
@@ -86,8 +88,8 @@ class JobCrawler():
     #         print(f'retry for {asyncfn.__name__}, {retries} times left.')
     #         return await self.retry(asyncfn, retries - 1)
     
-    def save_jobs(self, data, dist, prefix='data'):
-        filename = self.sink_path(dist)
+    def save_jobs(self, data, dist, extra_prefix):
+        filename = self.sink_path(dist, extra_prefix)
         os.makedirs(os.path.dirname(filename), exist_ok=True)
         with open(filename, 'w+') as file:
             file.write(json.dumps(data, indent=4, ensure_ascii=False))
@@ -120,9 +122,9 @@ class JobCrawler():
         else:
             self.log(dist, 'no job, skipping')
 
-    def is_cache_fresh(self, dist, cache_expiry_seconds=12 * HOUR):
+    def is_cache_fresh(self, dist, extra_prefix='', cache_expiry_seconds=12 * HOUR):
         threshold = time.time() - cache_expiry_seconds
-        path = self.sink_path(dist)
+        path = self.sink_path(dist, extra_prefix)
         try:
             mtime = os.path.getmtime(path)
             return mtime > threshold
@@ -142,7 +144,7 @@ class JobCrawler():
     def main(self):
         tasks = []
         for dist in self.get_districts():
-            if self.is_cache_fresh(dist):
+            if self.is_cache_fresh(dist, self.hr_bank):
                 self.log(dist, 'cache hit, skipping')
                 continue
             tasks.append(self.loop.create_task(self.run(dist)))
