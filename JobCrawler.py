@@ -88,6 +88,13 @@ class JobCrawler():
             file.write(json.dumps(data, indent=4, ensure_ascii=False))
         self.log(dist, 'saved')
 
+    def save_bookmark(self, dist, extra_prefix):
+        filename = 'over1000jobs.csv'
+        os.makedirs(os.path.dirname(filename), exist_ok=True)
+        with open(filename, 'a+') as file:
+            hr_bank = extra_prefix if extra_prefix else 'main'
+            file.write(f'{hr_bank},{dist["city_name"]}{dist["name"]}')
+
     async def get_jobs(self, cookies, dist):
         list_url = 'https://job.taiwanjobs.gov.tw/Internet/Index/ajax/job_search_listPage.ashx'
         raw_payload = f'startAt={self.start}&pageSize={self.batch_size}&sortField='
@@ -95,7 +102,10 @@ class JobCrawler():
         res.raise_for_status()
         if res.text:
             data = json.loads(res.text)
-            await self.loop.run_in_executor(None, self.save_jobs, data, dist)
+            if len(data) >= 1000:
+                await self.loop.run_in_executor(None, self.save_bookmark, dist, self.hr_bank)
+            await self.loop.run_in_executor(None, self.save_jobs, data, dist, self.hr_bank)
+
         else:
             self.log(dist, 'no job, skipping')
 
