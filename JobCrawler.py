@@ -28,7 +28,7 @@ class JobCrawler():
         self.user_agent_rotator = UserAgent(software_names=software_names, operating_systems=operating_systems, limit=100)
     
     def sink_path(self, dist, extra_prefix):
-        prefix = f'data/{extra_prefix}' if extra_prefix else 'data'
+        prefix = f'data/{extra_prefix}' if extra_prefix else 'data/main'
         return f'{prefix}/{dist["city_name"]}/{dist["name"]}.json'
 
     def get_headers(self):
