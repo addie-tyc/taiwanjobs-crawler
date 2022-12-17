@@ -51,7 +51,7 @@ class JobCrawler():
         return headers
 
     def log(self, dist, message):
-        print(f'{dist["city_name"]}{dist["name"]} - {message}')
+        print(f'{dist["city_name"]}{dist["name"]} - {message} {self.hr_bank}')
 
     def get_random_user_agent(self):
         return self.user_agent_rotator.get_random_user_agent()
@@ -66,12 +66,15 @@ class JobCrawler():
             dists = html.findAll('input', {'id': re.compile(dists_key)})
             for dist in dists:
                 yield {'city_name': city['title'], 'name': dist['title'], 'id': dist['id'], 'value': dist['value']}
+    
+    async def js_click(self, page, selector):
+        btn = await page.querySelector(selector)
+        if btn: await page.evaluate(f'document.querySelector("{selector}").click();')
 
     async def search(self, page, dist):
         self.log(dist, 'crawling')
         await page.waitForSelector('#CPH1_btnSearch')
-        dist_btn = await page.querySelector(f'#{dist["id"]}')
-        if dist_btn: await page.evaluate(f'document.querySelector("#{dist["id"]}").click();')
+        await self.js_click(page, f'#{dist["id"]}')
         await page.click('#CPH1_btnSearch')
         await page.waitForNavigation({'waitUntil': 'networkidle2'})
         return page
