@@ -31,6 +31,25 @@ class JobCrawler():
         prefix = f'data/{extra_prefix}' if extra_prefix else 'data'
         return f'{prefix}/{dist["city_name"]}/{dist["name"]}.json'
 
+    def get_headers(self):
+        headers = {
+            'Host': 'job.taiwanjobs.gov.tw',
+            'User-Agent': self.get_random_user_agent(),
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Content-Length': '2338',
+            'Origin': 'https://job.taiwanjobs.gov.tw',
+            'Connection': 'keep-alive',
+            'Referer': 'https://job.taiwanjobs.gov.tw/Internet/Index/job_search_list.aspx',
+            'Upgrade-Insecure-Requests': '1',
+            'Sec-Fetch-Dest': 'document',
+            'Sec-Fetch-Mode': 'navigate',
+            'Sec-Fetch-Site': 'same-origin',
+            'Sec-Fetch-User': '?1'
+        }
+        return headers
+
     def log(self, dist, message):
         print(f'{dist["city_name"]}{dist["name"]} - {message}')
 
@@ -71,24 +90,8 @@ class JobCrawler():
 
     async def get_jobs(self, cookies, dist):
         list_url = 'https://job.taiwanjobs.gov.tw/Internet/Index/ajax/job_search_listPage.ashx'
-        headers = {
-            'Host': 'job.taiwanjobs.gov.tw',
-            'User-Agent': self.get_random_user_agent(),
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.5',
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'Content-Length': '2338',
-            'Origin': 'https://job.taiwanjobs.gov.tw',
-            'Connection': 'keep-alive',
-            'Referer': 'https://job.taiwanjobs.gov.tw/Internet/Index/job_search_list.aspx',
-            'Upgrade-Insecure-Requests': '1',
-            'Sec-Fetch-Dest': 'document',
-            'Sec-Fetch-Mode': 'navigate',
-            'Sec-Fetch-Site': 'same-origin',
-            'Sec-Fetch-User': '?1'
-        }
-        raw_payload = f'startAt={self.start}&pageSize={self.batch_size}&sortField=TRANDATE+desc'
-        res = requests.post(list_url, headers=headers, cookies=cookies, data=raw_payload)
+        raw_payload = f'startAt={self.start}&pageSize={self.batch_size}&sortField='
+        res = requests.post(list_url, headers=self.get_headers(), cookies=cookies, data=raw_payload)
         res.raise_for_status()
         if res.text:
             data = json.loads(res.text)
