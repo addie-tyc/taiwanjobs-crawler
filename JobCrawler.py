@@ -94,10 +94,9 @@ class JobCrawler():
 
     def save_bookmark(self, dist, extra_prefix):
         filename = 'over1000jobs.csv'
-        os.makedirs(os.path.dirname(filename), exist_ok=True)
         with open(filename, 'a+') as file:
             hr_bank = extra_prefix if extra_prefix else 'main'
-            file.write(f'{hr_bank},{dist["city_name"]}{dist["name"]}')
+            file.write(f'{hr_bank},{dist["city_name"]},{dist["name"]}\n')
 
     async def get_jobs(self, cookies, dist):
         list_url = 'https://job.taiwanjobs.gov.tw/Internet/Index/ajax/job_search_listPage.ashx'
